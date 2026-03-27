@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>SSH Tunnel Manager</title>
+    <style>
+        :root {
+            --border-color: #b7c5d9;
+            --bg-light: #eef2ff;
+            --bg-hover: #d6daf0;
+        }
+
+        body {
+            background-color: #ffffff;
+            color: #000000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 13px;
+            margin: 0;
+            padding: 20px;
+        }
+
+        /* 表格圆角容器 */
+        .table-container {
+            border: 2px solid var(--border-color);
+            border-radius: 10px;
+            overflow: hidden;
+            display: inline-block;
+            min-width: 800px;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th,
+        td {
+            border: 1px solid var(--border-color);
+            padding: 8px 12px;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        th {
+            background-color: var(--bg-light);
+            font-weight: bold;
+        }
+
+        /* 按钮样式 */
+        button {
+            background-color: var(--bg-light);
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            padding: 4px 10px;
+            font-size: 12px;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background-color: var(--bg-hover);
+        }
+
+        .btn-start {
+            background-color: #98fb98;
+        }
+
+        .btn-stop {
+            background-color: #ffcccb;
+        }
+
+        .btn-status-up {
+            color: #008000;
+            font-weight: bold;
+        }
+
+        .btn-status-down {
+            color: #808080;
+        }
+
+        .error-hint {
+            color: #af0a0f;
+            cursor: help;
+            text-decoration: underline dotted;
+        }
+
+        /* 弹窗样式 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            background-color: #ffffff;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: 5px 5px 20px rgba(0, 0, 0, 0.2);
+            padding: 0;
+        }
+
+        .modal-header {
+            background-color: var(--border-color);
+            padding: 8px 15px;
+            font-weight: bold;
+            cursor: move;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-body {
+            padding: 15px;
+        }
+
+        /* 表单布局：Label + Input 左右排列 */
+        .field {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .field label {
+            width: 120px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .field input,
+        .field select {
+            flex-grow: 1;
+            padding: 4px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+
+        .field-radio-group {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        /* 密码切换容器 */
+        .pass-container {
+            display: flex;
+            gap: 2px;
+            flex-grow: 1;
+        }
+
+        /* 用户管理双栏布局 */
+        .user-split {
+            display: flex;
+            gap: 20px;
+        }
+
+        .user-left {
+            flex: 1;
+            border-right: 1px solid var(--border-color);
+            padding-right: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .user-right {
+            flex: 1;
+        }
+
+        .ws-status {
+            margin-left: 20px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            background: #f0f0f0;
+        }
+
+        .nav-container {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="nav-container">
+        <button onclick="showUserModal()">Manage Users</button>
+        <button onclick="showTunnelModal()">Add Tunnel</button>
+        <button onclick="showChangePassModal()">Change Admin Password</button>
+        <button onclick="window.location.href='/logout'">Logout</button>
+        <span id="ws-indicator" class="ws-status">ws: initializing...</span>
+    </div>
+
+    <div class="table-container">
+        <table id="tunnel-table">
+            <thead>
+                <tr>
+                    <th>Order</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>SSH Host</th>
+                    <th>User</th>
+                    <th>Remote Bind</th>
+                    <th>Local Bind</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- 用户管理弹窗 -->
+    <div id="user-modal" class="modal" style="width: 600px;">
+        <div class="modal-header"><span>Manage SSH Users</span></div>
+        <div class="modal-body">
+            <div class="user-split">
+                <div class="user-left">
+                    <strong>SSH User List:</strong>
+                    <ul id="ssh-user-list-items" style="list-style: none; padding: 0;"></ul>
+                </div>
+                <div class="user-right">
+                    <strong>Add / Update User:</strong>
+                    <div class="field" style="margin-top:10px;"><label>Name ID:</label><input type="text"
+                            id="ssh-u-name"></div>
+                    <div class="field"><label>Username:</label><input type="text" id="ssh-u-user"></div>
+                    <div class="field">
+                        <label>Password:</label>
+                        <div class="pass-container">
+                            <input type="password" id="ssh-u-pass">
+                            <button onclick="togglePass('ssh-u-pass')">👁</button>
+                        </div>
+                    </div>
+                    <button onclick="addSSHUser()" style="width:100%; background:#eef2ff;">Save User</button>
+                </div>
+            </div>
+            <hr style="border:0; border-top:1px solid #ddd; margin:15px 0;">
+            <button onclick="hideModal('user-modal')">Close</button>
+        </div>
+    </div>
+
+    <!-- 隧道管理弹窗 -->
+    <div id="tunnel-modal" class="modal" style="width: 500px;">
+        <div class="modal-header"><span id="tunnel-modal-title">Add Tunnel</span></div>
+        <div class="modal-body">
+            <input type="hidden" id="tunnel-id">
+            <div class="field"><label>Name:</label><input type="text" id="t-name"></div>
+            <div class="field">
+                <label>Forward Mode:</label>
+                <div class="field-radio-group">
+                    <span><input type="radio" name="t-type" value="L" id="t-type-l" checked> -L (Local)</span>
+                    <span><input type="radio" name="t-type" value="R" id="t-type-r"> -R (Remote)</span>
+                </div>
+            </div>
+            <div class="field"><label>SSH Host:</label><input type="text" id="t-host"></div>
+            <div class="field"><label>SSH Port:</label><input type="number" id="t-port" value="22"></div>
+            <div class="field"><label>SSH User:</label><select id="t-ssh-user"></select></div>
+            <hr>
+            <div class="field"><label>Remote IP:</label><input type="text" id="t-remote-host" value="127.0.0.1"></div>
+            <div class="field"><label>Remote Port:</label><input type="number" id="t-remote-port"></div>
+            <div class="field"><label>Local IP:</label><input type="text" id="t-local-host" value="127.0.0.1"></div>
+            <div class="field"><label>Local Port:</label><input type="number" id="t-local-port"></div>
+            <div style="text-align: right; margin-top: 15px;">
+                <button onclick="saveTunnel()" class="btn-start">Save Tunnel</button>
+                <button onclick="hideModal('tunnel-modal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 管理员密码弹窗 -->
+    <div id="pass-modal" class="modal" style="width: 350px;">
+        <div class="modal-header"><span>Change Admin Password</span></div>
+        <div class="modal-body">
+            <div class="field"><label>Old Password:</label>
+                <div class="pass-container"><input type="password" id="old-pass"><button
+                        onclick="togglePass('old-pass')">👁</button></div>
+            </div>
+            <div class="field"><label>New Password:</label>
+                <div class="pass-container"><input type="password" id="new-pass"><button
+                        onclick="togglePass('new-pass')">👁</button></div>
+            </div>
+            <div class="field"><label>Confirm:</label>
+                <div class="pass-container"><input type="password" id="confirm-pass"><button
+                        onclick="togglePass('confirm-pass')">👁</button></div>
+            </div>
+            <button onclick="changeAdminPass()" style="width:100%; margin-top:10px;">Update Password</button>
+            <button onclick="hideModal('pass-modal')" style="width:100%; margin-top:5px;">Cancel</button>
+        </div>
+    </div>
+
+    <script>
+        // 密码显隐切换
+        function togglePass(id) {
+            const el = document.getElementById(id);
+            el.type = el.type === 'password' ? 'text' : 'password';
+        }
+
+        // 拖拽功能
+        function makeDraggable(modalId) {
+            const modal = document.getElementById(modalId);
+            const header = modal.querySelector('.modal-header');
+            let offsetLeft, offsetTop, isDragging = false;
+            header.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                offsetLeft = e.clientX - modal.offsetLeft;
+                offsetTop = e.clientY - modal.offsetTop;
+            });
+            document.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    modal.style.left = (e.clientX - offsetLeft) + 'px';
+                    modal.style.top = (e.clientY - offsetTop) + 'px';
+                }
+            });
+            document.addEventListener('mouseup', () => { isDragging = false; });
+        }
+        ['user-modal', 'tunnel-modal', 'pass-modal'].forEach(makeDraggable);
+
+        function hideModal(id) { document.getElementById(id).style.display = 'none'; }
+        function showUserModal() { loadSSHUsers(); const m = document.getElementById('user-modal'); m.style.display = 'block'; m.style.left = '100px'; m.style.top = '100px'; }
+        function showChangePassModal() { const m = document.getElementById('pass-modal'); m.style.display = 'block'; m.style.left = '200px'; m.style.top = '150px'; }
+
+        async function showTunnelModal(tunnel = null) {
+            await loadUserOptions();
+            const m = document.getElementById('tunnel-modal');
+            m.style.display = 'block'; m.style.left = '150px'; m.style.top = '100px';
+            if (tunnel) {
+                document.getElementById('tunnel-id').value = tunnel.id;
+                document.getElementById('t-name').value = tunnel.name;
+                document.querySelector(`input[name="t-type"][value="${tunnel.type}"]`).checked = true;
+                document.getElementById('t-host').value = tunnel.ssh_host;
+                document.getElementById('t-port').value = tunnel.ssh_port;
+                document.getElementById('t-ssh-user').value = tunnel.ssh_user_ref;
+                document.getElementById('t-remote-host').value = tunnel.remote_bind[0];
+                document.getElementById('t-remote-port').value = tunnel.remote_bind[1];
+                document.getElementById('t-local-host').value = tunnel.local_bind[0];
+                document.getElementById('t-local-port').value = tunnel.local_bind[1];
+                document.getElementById('tunnel-modal-title').innerText = "Edit Tunnel";
+            } else {
+                document.getElementById('tunnel-id').value = "";
+                document.getElementById('t-name').value = "";
+                document.getElementById('t-type-l').checked = true;
+                document.getElementById('t-host').value = "";
+                document.getElementById('t-port').value = "22";
+                document.getElementById('t-remote-host').value = "127.0.0.1";
+                document.getElementById('t-remote-port').value = "";
+                document.getElementById('t-local-host').value = "127.0.0.1";
+                document.getElementById('t-local-port').value = "";
+                document.getElementById('tunnel-modal-title').innerText = "Add Tunnel";
+            }
+        }
+
+        async function loadSSHUsers() {
+            const res = await fetch('/api/ssh_users');
+            const users = await res.json();
+            const list = document.getElementById('ssh-user-list-items');
+            list.innerHTML = '';
+            users.forEach(u => {
+                const li = document.createElement('li');
+                li.style.padding = '5px';
+                li.style.borderBottom = '1px solid #eee';
+                li.innerHTML = `<span><strong>${u.name}</strong></span> <button onclick="deleteSSHUser('${u.name}')" style="float:right; padding:0 4px;">Del</button>`;
+                list.appendChild(li);
+            });
+        }
+
+        async function loadUserOptions() {
+            const res = await fetch('/api/ssh_users');
+            const users = await res.json();
+            const select = document.getElementById('t-ssh-user');
+            select.innerHTML = '';
+            users.forEach(u => {
+                const opt = document.createElement('option');
+                opt.value = u.name; opt.innerText = u.name;
+                select.appendChild(opt);
+            });
+        }
+
+        async function loadTunnels() {
+            const res = await fetch('/api/tunnels');
+            const tunnels = await res.json();
+            const tbody = document.querySelector('#tunnel-table tbody');
+            tbody.innerHTML = '';
+
+            tunnels.forEach((t, index) => {
+                const tr = document.createElement('tr');
+                let statusHtml = '';
+                if (t.is_active) {
+                    statusHtml = '<span class="btn-status-up">Active</span>';
+                } else if (t.last_error) {
+                    const shortErr = t.last_error.length > 25 ? t.last_error.substring(0, 25) + '...' : t.last_error;
+                    statusHtml = `<span class="error-hint" title="${t.last_error}">${shortErr}</span>`;
+                } else {
+                    statusHtml = '<span class="btn-status-down">Stopped</span>';
+                }
+
+                // 排序按钮逻辑：第一条隐藏上，最后一条隐藏下
+                const upBtn = index === 0 ? '' : `<button onclick="sortTunnel('${t.id}', 'up')">↑</button>`;
+                const downBtn = index === tunnels.length - 1 ? '' : `<button onclick="sortTunnel('${t.id}', 'down')">↓</button>`;
+
+                tr.innerHTML = `
+                    <td>${upBtn} ${downBtn}</td>
+                    <td>${t.name}</td><td>-${t.type}</td><td>${t.ssh_host}:${t.ssh_port}</td>
+                    <td style="color:#2b6cb0;">${t.ssh_user_ref || ''}</td>
+                    <td>${t.remote_bind[0]}:${t.remote_bind[1]}</td><td>${t.local_bind[0]}:${t.local_bind[1]}</td>
+                    <td>${statusHtml}</td>
+                    <td>
+                        ${t.user_wants_active ? `<button class="btn-stop" onclick="stopTunnel('${t.id}')">Stop</button>` : `<button class="btn-start" onclick="startTunnel('${t.id}')">Start</button>`}
+                        ${t.user_wants_active ? `<button disabled style="opacity:0.5;">Edit</button>` : `<button onclick='showTunnelModal(${JSON.stringify(t)})'>Edit</button>`}
+                        <button onclick="deleteTunnel('${t.id}')">Delete</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            updateWsStatus();
+        }
+
+        function updateWsStatus() {
+            const now = new Date().toLocaleString();
+            const el = document.getElementById('ws-indicator');
+            el.innerHTML = `Connected | <small>${now}</small>`;
+            el.style.color = '#38a169';
+        }
+
+        // 原有 API 调用逻辑保持不变
+        async function addSSHUser() {
+            const name = document.getElementById('ssh-u-name').value;
+            const user = document.getElementById('ssh-u-user').value;
+            const pass = document.getElementById('ssh-u-pass').value;
+            if (!name || !user || !pass) return;
+            const res = await fetch('/api/ssh_users/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, login_username: user, login_password: pass }) });
+            loadSSHUsers();
+        }
+        async function deleteSSHUser(name) {
+            const res = await fetch('/api/ssh_users/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+            loadSSHUsers();
+        }
+        async function changeAdminPass() {
+            const old_p = document.getElementById('old-pass').value;
+            const new_p = document.getElementById('new-pass').value;
+            const res = await fetch('/api/auth/change_password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ old_password: old_p, new_password: new_p }) });
+            const data = await res.json(); alert(data.message);
+            if (data.success) hideModal('pass-modal');
+        }
+        async function saveTunnel() {
+            const id = document.getElementById('tunnel-id').value;
+            const data = {
+                id: id || null,
+                name: document.getElementById('t-name').value,
+                type: document.querySelector('input[name="t-type"]:checked').value,
+                ssh_host: document.getElementById('t-host').value,
+                ssh_port: document.getElementById('t-port').value,
+                ssh_user_ref: document.getElementById('t-ssh-user').value,
+                remote_bind: [document.getElementById('t-remote-host').value, parseInt(document.getElementById('t-remote-port').value)],
+                local_bind: [document.getElementById('t-local-host').value, parseInt(document.getElementById('t-local-port').value)]
+            };
+            await fetch(id ? '/api/tunnels/edit' : '/api/tunnels/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+            hideModal('tunnel-modal'); loadTunnels();
+        }
+        async function deleteTunnel(id) { if (confirm("Delete?")) { await fetch('/api/tunnels/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }); loadTunnels(); } }
+        async function startTunnel(id) { await fetch('/api/tunnels/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }); loadTunnels(); }
+        async function stopTunnel(id) { await fetch('/api/tunnels/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }); loadTunnels(); }
+        async function sortTunnel(id, direction) { await fetch('/api/tunnels/sort', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, direction }) }); loadTunnels(); }
+
+        loadTunnels();
+        setInterval(loadTunnels, 5000);
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,21 @@
+# python的目标文件
+/dict/
+/__pycache__/
+
+# Rust编译产物
+/target/
+**/*.rs.bk
+
+# Cargo lock文件（库项目通常忽略，应用项目保留）
+# Cargo.lock
+
+# IDE文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*.pcap
+
+# 操作系统文件
+.DS_Store
+Thumbs.db

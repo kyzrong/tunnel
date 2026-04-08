@@ -6,6 +6,7 @@ import time
 import uuid
 import logging
 import ssl
+import threading
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,6 +15,10 @@ logging.basicConfig(
 )
 
 app = Flask(__name__)
+# 禁用 Werkzeug 默认的访问日志
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR) # 只显示错误，不显示正常的 INFO (GET/POST)
+
 app.secret_key = 'super_secret_ssh_tunnel_key'
 
 # Global state
@@ -119,6 +124,41 @@ def sort_tunnel():
     success = ModelManager.sort_tunnel(data['id'], data['direction'])
     return jsonify({"success": success})
 
+def _auto_start_tunnels():
+    logging.info("开始检查并自动启动后台隧道...")
+    time.sleep(2)  # 等待 Flask 启动后执行，防止过早争夺资源
+    tunnels = ModelManager.get_tunnels()
+    started_count = 0
+    for t in tunnels:
+        if t.get('auto_start') == True:
+            logging.info(f"正在自动启动隧道: {t.get('name', 'Unknown')}")
+            success, msg = TunnelController.start_tunnel(t['id'])
+            if success:
+                started_count += 1
+                logging.info(f"隧道 '{t.get('name', 'Unknown')}' 启动指令发送成功: {msg}")
+            else:
+                logging.error(f"隧道 '{t.get('name', 'Unknown')}' 自动启动失败: {msg}")
+    
+    if started_count > 0:
+        logging.info(f"后台隧道自动启动处理完成，已发出 {started_count} 个隧道的启动指令。")
+    else:
+        logging.info("没有需要自动启动的隧道。")
+
 if __name__ == '__main__':
-        # Removed ssl_context to use HTTP
-    app.run(host='0.0.0.0', port=8443)
+    import argparse
+    listen_addr = "0.0.0.0"
+    listen_port = 8443
+
+    p = argparse.ArgumentParser(description="")
+
+    p.add_argument("-i", "--ip", help="set remove ip,default 0.0.0.0", default='0.0.0.0')
+    p.add_argument("-p", "--port", help="set port,xxx or xxx-yyy,default 8443", default=8443)
+    args = p.parse_args()
+    if args.ip:
+        listen_addr = args.ip
+    if args.port:
+        listen_port = args.port
+
+    print(f"Listening on: {listen_addr}:{listen_port}")
+    threading.Thread(target=_auto_start_tunnels, daemon=True).start()
+    app.run(host=listen_addr, port=listen_port)

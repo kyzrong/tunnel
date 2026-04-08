@@ -93,7 +93,11 @@ class ModelManager:
     @staticmethod
     def get_tunnels() -> List[Dict[str, Any]]:
         with open(TUNNEL_FILE, 'r') as f:
-            return json.load(f)
+            tunnels = json.load(f)
+            for t in tunnels:
+                if 'auto_start' not in t:
+                    t['auto_start'] = False
+            return tunnels
 
     @staticmethod
     def save_tunnels(tunnels: List[Dict[str, Any]]):

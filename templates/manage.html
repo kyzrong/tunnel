@@ -248,6 +248,7 @@
             <div class="field"><label>SSH Host:</label><input type="text" id="t-host"></div>
             <div class="field"><label>SSH Port:</label><input type="number" id="t-port" value="22"></div>
             <div class="field"><label>SSH User:</label><select id="t-ssh-user"></select></div>
+            <div class="field"><label>Auto Start:</label><input type="checkbox" id="t-auto-start" style="flex-grow:0; width:auto; cursor:pointer;" title="Start automatically on server boot"></div>
             <hr>
             <div class="field"><label>Remote IP:</label><input type="text" id="t-remote-host" value="127.0.0.1"></div>
             <div class="field"><label>Remote Port:</label><input type="number" id="t-remote-port"></div>
@@ -323,6 +324,7 @@
                 document.getElementById('t-host').value = tunnel.ssh_host;
                 document.getElementById('t-port').value = tunnel.ssh_port;
                 document.getElementById('t-ssh-user').value = tunnel.ssh_user_ref;
+                document.getElementById('t-auto-start').checked = tunnel.auto_start === true;
                 document.getElementById('t-remote-host').value = tunnel.remote_bind[0];
                 document.getElementById('t-remote-port').value = tunnel.remote_bind[1];
                 document.getElementById('t-local-host').value = tunnel.local_bind[0];
@@ -334,6 +336,7 @@
                 document.getElementById('t-type-l').checked = true;
                 document.getElementById('t-host').value = "";
                 document.getElementById('t-port').value = "22";
+                document.getElementById('t-auto-start').checked = false;
                 document.getElementById('t-remote-host').value = "127.0.0.1";
                 document.getElementById('t-remote-port').value = "";
                 document.getElementById('t-local-host').value = "127.0.0.1";
@@ -444,7 +447,8 @@
                 ssh_port: document.getElementById('t-port').value,
                 ssh_user_ref: document.getElementById('t-ssh-user').value,
                 remote_bind: [document.getElementById('t-remote-host').value, parseInt(document.getElementById('t-remote-port').value)],
-                local_bind: [document.getElementById('t-local-host').value, parseInt(document.getElementById('t-local-port').value)]
+                local_bind: [document.getElementById('t-local-host').value, parseInt(document.getElementById('t-local-port').value)],
+                auto_start: document.getElementById('t-auto-start').checked
             };
             await fetch(id ? '/api/tunnels/edit' : '/api/tunnels/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
             hideModal('tunnel-modal'); loadTunnels();
